@@ -1,0 +1,9 @@
+models/
+tools/
+.cache/
+logs/
+.local-ai-config.json
+*.log
+*.tmp
+*.bak
+__pycache__/

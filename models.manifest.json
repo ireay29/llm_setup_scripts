@@ -1,0 +1,56 @@
+{
+  "defaultModel": "qwen35-4b-long",
+  "llamaCpp": {
+    "release": "latest",
+    "assetPattern": "llama-b*-bin-win-vulkan-x64.zip"
+  },
+  "models": {
+    "qwen35-4b-long": {
+      "description": "Qwen3.5 4B Q4_K_M, 100K context, speed-oriented long-context default.",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf?download=true",
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "sha256": "00FE7986FF5F6B463E62455821146049DB6F9313603938A70800D1FB69EF11A4",
+      "alias": "qwen3.5-4b-long-local",
+      "ctxSize": 100000,
+      "batch": 1024,
+      "ubatch": 512,
+      "reasoning": "off",
+      "flashAttn": "on"
+    },
+    "qwen35-9b-long": {
+      "description": "Qwen3.5 9B Q4_K_M, 100K context, quality-oriented.",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf?download=true",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03B74727A860A56338E042C4420BB3F04B2FEC5734175F4CB9FA853DAF52B7E8",
+      "alias": "qwen3.5-9b-long-local",
+      "ctxSize": 100000,
+      "batch": 1024,
+      "ubatch": 512,
+      "reasoning": "off",
+      "flashAttn": "on"
+    },
+    "qwen35-9b-long-fast": {
+      "description": "Qwen3.5 9B Q3_K_M, 100K context, speed-oriented.",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q3_K_M.gguf?download=true",
+      "file": "Qwen3.5-9B-Q3_K_M.gguf",
+      "sha256": "8FED90306E4F019E2BF35F3766470B7BC59EA1A9DAE00F5CEB20B43CB5514393",
+      "alias": "qwen3.5-9b-long-fast-local",
+      "ctxSize": 100000,
+      "batch": 1024,
+      "ubatch": 512,
+      "reasoning": "off",
+      "flashAttn": "on"
+    },
+    "glm-flash": {
+      "description": "GLM-4.7 Flash 30B-A3B Q3_K_M, 16K context.",
+      "url": "https://huggingface.co/bartowski/zai-org_GLM-4.7-Flash-GGUF/resolve/main/zai-org_GLM-4.7-Flash-Q3_K_M.gguf?download=true",
+      "file": "zai-org_GLM-4.7-Flash-Q3_K_M.gguf",
+      "sha256": "924E61DDFA5F33126585950EB9867F1D6B169EBA93D15C342B8199F5E5C5A8B6",
+      "alias": "glm-4.7-flash-local",
+      "ctxSize": 16384,
+      "batch": 512,
+      "ubatch": 256,
+      "reasoning": "off"
+    }
+  }
+}
