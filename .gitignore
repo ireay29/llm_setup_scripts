@@ -1,9 +1,13 @@
 models/
 tools/
-.cache/
 logs/
+.cache/
 .local-ai-config.json
+*.pid
+*.gguf
+*.zip
 *.log
+.env
+auth.json
+state.db*
 *.tmp
-*.bak
-__pycache__/
