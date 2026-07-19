@@ -10,7 +10,7 @@ Run these commands from the repository root.
 
 This installs:
 
-- Latest `llama.cpp` Windows Vulkan build
+- SHA256-verified, pinned `llama.cpp` Windows Vulkan build
 - Qwen3.5 4B Q4_K_M GGUF
 - 100K context local config
 - Logon autostart for the local LLM server

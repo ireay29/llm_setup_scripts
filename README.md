@@ -10,7 +10,7 @@ The default profile installs Qwen3.5 4B with a 100K context window:
 
 What this repo manages:
 
-- Downloads a Windows Vulkan build of `llama.cpp`
+- Downloads the pinned, SHA256-verified Windows Vulkan build of `llama.cpp`
 - Downloads selected GGUF model files from `models.manifest.json`
 - Writes `.local-ai-config.json` for the selected model
 - Starts an OpenAI-compatible `llama-server`

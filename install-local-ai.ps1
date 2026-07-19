@@ -89,32 +89,49 @@ function Assert-Sha256 {
 function Install-LlamaCpp {
     param($Manifest)
 
+    $releaseTag = [string]$Manifest.llamaCpp.release
+    if ([string]::IsNullOrWhiteSpace($releaseTag) -or $releaseTag -eq "latest") {
+        throw "llamaCpp.release must be pinned to an exact llama.cpp release tag."
+    }
+
+    $assetName = [string]$Manifest.llamaCpp.assetName
+    if ([string]::IsNullOrWhiteSpace($assetName)) {
+        throw "llamaCpp.assetName must identify the exact Windows Vulkan release asset."
+    }
+
+    $expectedSha256 = [string]$Manifest.llamaCpp.sha256
+    if ($expectedSha256 -notmatch "^[0-9A-Fa-f]{64}$") {
+        throw "llamaCpp.sha256 must contain the release asset's 64-character SHA256 hash."
+    }
+
+    $llamaDir = Join-Path $ToolsDir "llama.cpp"
     $server = Join-Path $ToolsDir "llama.cpp\llama-server.exe"
-    if (Test-Path $server) {
-        Write-Host "llama.cpp already installed: $server"
-        return
+    $installedReleasePath = Join-Path $llamaDir ".release-tag"
+    if ((Test-Path $server) -and (Test-Path $installedReleasePath)) {
+        $installedRelease = (Get-Content $installedReleasePath -Raw).Trim()
+        if ($installedRelease -eq $releaseTag) {
+            Write-Host "llama.cpp $releaseTag already installed: $server"
+            return
+        }
     }
 
     New-Item -ItemType Directory -Force -Path $ToolsDir,$CacheDir | Out-Null
 
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" -TimeoutSec 30
-    $assetPattern = $Manifest.llamaCpp.assetPattern
-    if ([string]::IsNullOrWhiteSpace($assetPattern)) {
-        $assetPattern = "llama-b*-bin-win-vulkan-x64.zip"
-    }
+    $releaseUrl = "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/$releaseTag"
+    $release = Invoke-RestMethod -Uri $releaseUrl -TimeoutSec 30
 
     $asset = $release.assets |
-        Where-Object { $_.name -like $assetPattern } |
+        Where-Object { $_.name -eq $assetName } |
         Select-Object -First 1
 
     if (-not $asset) {
-        throw "Could not find llama.cpp release asset matching '$assetPattern' in release $($release.tag_name)"
+        throw "Could not find llama.cpp release asset '$assetName' in release $releaseTag"
     }
 
     $zip = Join-Path $CacheDir $asset.name
     Download-File -Url $asset.browser_download_url -OutFile $zip
+    Assert-Sha256 -Path $zip -Expected $expectedSha256
 
-    $llamaDir = Join-Path $ToolsDir "llama.cpp"
     New-Item -ItemType Directory -Force -Path $llamaDir | Out-Null
     Expand-Archive -Path $zip -DestinationPath $llamaDir -Force
 
@@ -131,7 +148,8 @@ function Install-LlamaCpp {
         throw "llama-server.exe was not installed to expected path: $server"
     }
 
-    Write-Host "Installed llama.cpp: $server"
+    Set-Content -Path $installedReleasePath -Value $releaseTag -Encoding ascii
+    Write-Host "Installed llama.cpp $releaseTag`: $server"
 }
 
 function Get-FileNameFromUrl {
@@ -289,11 +307,12 @@ Save-Config -Config $config
 
 if ($Autostart) {
     $register = Join-Path $Root "scripts\register-autostart-tasks.ps1"
-    $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $register)
     if ($WithHermes) {
-        $args += "-WithHermes"
+        & $register -WithHermes
     }
-    & powershell.exe @args
+    else {
+        & $register
+    }
 }
 elseif ($WithHermes) {
     Write-Warning "-WithHermes only has an effect together with -Autostart."

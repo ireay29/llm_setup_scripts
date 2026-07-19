@@ -1,8 +1,9 @@
 {
   "defaultModel": "qwen35-4b-long",
   "llamaCpp": {
-    "release": "latest",
-    "assetPattern": "llama-b*-bin-win-vulkan-x64.zip"
+    "release": "b10012",
+    "assetName": "llama-b10012-bin-win-vulkan-x64.zip",
+    "sha256": "3A3FD5965FAA434808B7AB945D2820DC23CE8237E8507A9F7719444C054696BB"
   },
   "models": {
     "qwen35-4b-long": {
