@@ -3,7 +3,9 @@ param(
     [string]$ConfigPath = (Join-Path (Split-Path -Parent $PSScriptRoot) ".local-ai-config.json"),
     [string]$Model,
     [string]$ApiKey = $env:LLAMA_API_KEY,
-    [string]$Prompt = "Reply in one concise sentence: what are you?"
+    [string]$Prompt = "Reply in one concise sentence: what are you?",
+    [string]$ImagePath,
+    [string]$ImageUrl
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,10 +23,39 @@ if ([string]::IsNullOrWhiteSpace($Model)) {
 }
 
 $headers = @{ Authorization = "Bearer $ApiKey" }
+$content = @(
+    @{ type = "text"; text = $Prompt }
+)
+
+if ($ImagePath -and $ImageUrl) {
+    throw "Use either -ImagePath or -ImageUrl, not both."
+}
+
+if ($ImagePath) {
+    $resolvedImagePath = (Resolve-Path $ImagePath).Path
+    $extension = [System.IO.Path]::GetExtension($resolvedImagePath).ToLowerInvariant()
+    $mimeType = switch ($extension) {
+        ".jpg" { "image/jpeg" }
+        ".jpeg" { "image/jpeg" }
+        ".png" { "image/png" }
+        ".webp" { "image/webp" }
+        default { throw "Unsupported image extension '$extension'. Use JPG, PNG, or WEBP." }
+    }
+    $encodedImage = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($resolvedImagePath))
+    $ImageUrl = "data:$mimeType;base64,$encodedImage"
+}
+
+if ($ImageUrl) {
+    if ($ImageUrl -notmatch "^(?i:https://|data:)") {
+        throw "-ImageUrl must be an HTTPS or data: image URL."
+    }
+    $content += @{ type = "image_url"; image_url = @{ url = $ImageUrl } }
+}
+
 $body = @{
     model = $Model
     messages = @(
-        @{ role = "user"; content = $Prompt }
+        @{ role = "user"; content = $content }
     )
     max_tokens = 128
     temperature = 0.2
