@@ -245,6 +245,20 @@ function Resolve-ModelConfig {
     }
     Assert-Sha256 -Path $target -Expected $spec.sha256
 
+    $mmproj = $null
+    if ($spec.mmprojUrl) {
+        if ([string]::IsNullOrWhiteSpace($spec.mmprojFile)) {
+            throw "Model '$Model' defines mmprojUrl but not mmprojFile."
+        }
+
+        $mmprojTarget = Join-Path $ModelsDir $spec.mmprojFile
+        if (-not (Test-Path $mmprojTarget)) {
+            Download-File -Url $spec.mmprojUrl -OutFile $mmprojTarget
+        }
+        Assert-Sha256 -Path $mmprojTarget -Expected $spec.mmprojSha256
+        $mmproj = "models\$($spec.mmprojFile)"
+    }
+
     if ($CtxSize -le 0) {
         $CtxSize = [int]$spec.ctxSize
     }
@@ -260,7 +274,9 @@ function Resolve-ModelConfig {
         flashAttn = $spec.flashAttn
         cacheTypeK = $spec.cacheTypeK
         cacheTypeV = $spec.cacheTypeV
-        mmproj = $spec.mmproj
+        gpuLayers = $spec.gpuLayers
+        mmproj = if ($mmproj) { $mmproj } else { $spec.mmproj }
+        mmprojOffload = $spec.mmprojOffload
         imageMaxTokens = $spec.imageMaxTokens
         mtmdBatchMaxTokens = $spec.mtmdBatchMaxTokens
         hostName = $HostName

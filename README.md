@@ -26,6 +26,12 @@ What this repo does not commit:
 
 ## Quick Start
 
+For a button-based launcher, double-click `launch-local-ai.cmd`. It lets you
+select a model, installs it when needed, stops the current server before a
+switch, starts the selected model, and opens the local chat page. It also
+includes copyable Chandra OCR prompts for Markdown, JSON, HTML, and plain-text
+output.
+
 List known models:
 
 ```powershell
@@ -79,7 +85,53 @@ Install a model from the manifest:
 .\install-local-ai.cmd -Model qwen35-9b-long
 .\install-local-ai.cmd -Model qwen35-9b-long-fast
 .\install-local-ai.cmd -Model glm-flash
+.\install-local-ai.cmd -Model minicpm-v-4.5
+.\install-local-ai.cmd -Model qwen36-27b-64k
+.\install-local-ai.cmd -Model chandra-ocr-2
 ```
+
+## Long-context text: Qwen3.6 27B
+
+The `qwen36-27b-64k` profile installs Qwen3.6 27B Q3_K_S as a text-only,
+CPU-friendly profile with a 64K context window and Q8 KV cache. It requires
+approximately 12.4 GB for the model file and substantially more RAM while
+serving long prompts.
+
+## Vision: MiniCPM-V 4.5
+
+MiniCPM-V 4.5 is an image-capable local model. Its Q4_K_M model is 5.03 GB and
+its required vision projector is 1.1 GB; the installer downloads and
+SHA256-verifies both files.
+
+```powershell
+.\install-local-ai.cmd -Model minicpm-v-4.5
+.\scripts\start-local-ai.cmd
+.\scripts\test-local-ai.cmd -ImagePath "C:\images\receipt.jpg" -Prompt "Extract all visible text."
+```
+
+`-ImageUrl` accepts an HTTPS or `data:` image URL. `-ImagePath` accepts JPG,
+PNG, and WEBP files and converts them to a `data:` URL automatically.
+
+The MiniCPM profile uses CPU inference by default on PCs with an integrated GPU,
+because the model and vision projector together require more than 6 GB of GPU
+memory. Use a dedicated GPU profile only after confirming sufficient VRAM.
+
+## OCR: Chandra OCR 2
+
+The `chandra-ocr-2` profile is specialized for extracting text and preserving
+the layout of documents and images. It uses the IQ4_NL GGUF (3.05 GB) and a
+required 676 MB vision projector. Both are SHA256-verified during installation.
+
+```powershell
+.\install-local-ai.cmd -Model chandra-ocr-2
+.\scripts\start-local-ai.cmd
+.\scripts\test-local-ai.cmd -ImagePath "C:\images\document.png" -Prompt "Extract all visible text and preserve the layout as Markdown."
+```
+
+It is configured for 64K context and CPU inference by default, which is the
+safe option for this PC's integrated GPU. The model supports up to 256K, but
+64K is the practical balance for this PC's 32 GB of RAM. The prompt may request Markdown,
+HTML, JSON, or plain extracted text depending on the intended output.
 
 Override context size:
 

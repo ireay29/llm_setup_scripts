@@ -52,6 +52,7 @@ if (-not (Test-Path $model)) {
 
 $batch = if ($config.batch) { [int]$config.batch } else { 512 }
 $ubatch = if ($config.ubatch) { [int]$config.ubatch } else { 256 }
+$gpuLayers = if ($null -ne $config.gpuLayers) { [string]$config.gpuLayers } else { "all" }
 
 Write-Host "Starting llama.cpp server"
 Write-Host "  config  : $ConfigPath"
@@ -59,6 +60,9 @@ Write-Host "  model   : $model"
 Write-Host "  alias   : $Alias"
 Write-Host "  bind    : http://$HostName`:$Port"
 Write-Host "  ctx     : $CtxSize"
+if ($config.mmproj) {
+    Write-Host "  vision  : $config.mmproj"
+}
 Write-Host ""
 
 $args = @(
@@ -68,7 +72,7 @@ $args = @(
     "--port", $Port,
     "--api-key", $ApiKey,
     "-c", $CtxSize,
-    "-ngl", "all",
+    "-ngl", $gpuLayers,
     "-t", $Threads,
     "-np", $Parallel,
     "-b", $batch,
@@ -94,7 +98,9 @@ if ($config.mmproj) {
     if (-not (Test-Path $mmproj)) {
         throw "MM projector file was not found: $mmproj"
     }
-    $args += @("-mm", $mmproj, "--mmproj-offload")
+    $args += @("-mm", $mmproj)
+    $mmprojOffload = if ($null -ne $config.mmprojOffload) { [bool]$config.mmprojOffload } else { $true }
+    $args += if ($mmprojOffload) { "--mmproj-offload" } else { "--no-mmproj-offload" }
 }
 if ($config.imageMaxTokens) {
     $args += @("--image-max-tokens", [int]$config.imageMaxTokens)

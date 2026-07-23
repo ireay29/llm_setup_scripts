@@ -21,6 +21,17 @@ This installs:
 .\scripts\start-local-ai.cmd
 ```
 
+## Vision model
+
+Install MiniCPM-V 4.5 for image input. The installer fetches both the Q4_K_M
+model and its required vision projector.
+
+```powershell
+.\install-local-ai.cmd -Model minicpm-v-4.5
+.\scripts\start-local-ai.cmd
+.\scripts\test-local-ai.cmd -ImagePath "C:\images\sample.png" -Prompt "Describe this image in Japanese."
+```
+
 ## Test
 
 ```powershell
