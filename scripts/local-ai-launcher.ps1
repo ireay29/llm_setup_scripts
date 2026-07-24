@@ -224,6 +224,8 @@ $script:nextStatusRefresh = [DateTime]::MinValue
 $script:operationDownloadPath = $null
 $script:operationStage = $null
 $script:operationLogPath = $null
+$script:serverLogPath = $null
+$script:serverFailureReported = $false
 
 function Write-LauncherLog {
     param([string]$Message)
@@ -245,7 +247,7 @@ function Format-ByteCount {
 }
 
 function Update-OperationProgress {
-    if ($script:operationLogPath -and (Test-Path $script:operationLogPath)) {
+    if ($script:operationProcess -and $script:operationLogPath -and (Test-Path $script:operationLogPath)) {
         $logLines = @(Get-Content $script:operationLogPath -Tail 40 -ErrorAction SilentlyContinue)
         $logBox.Lines = $logLines
         if ($logLines -match "^Downloading:") {
@@ -257,6 +259,12 @@ function Update-OperationProgress {
         elseif ($logLines -match "^Wrote config:") {
             $script:operationStage = "Saving selected-model settings"
         }
+    }
+
+    if ($script:serverStarting -and $script:serverLogPath -and (Test-Path $script:serverLogPath)) {
+        $logBox.Lines = @(Get-Content $script:serverLogPath -Tail 40 -ErrorAction SilentlyContinue)
+        $downloadDetail.Text = "Loading selected model..."
+        return
     }
 
     if (-not $script:operationDownloadPath) {
@@ -304,6 +312,12 @@ function Refresh-ServerStatus {
         Write-LauncherLog "Server process exited before it became ready."
         $statusLabel.Text = "Server stopped unexpectedly."
         $chatButton.Enabled = $false
+        if (-not $script:serverFailureReported) {
+            $script:serverFailureReported = $true
+            $details = if ($script:serverLogPath -and (Test-Path $script:serverLogPath)) { (Get-Content $script:serverLogPath -Tail 12) -join [Environment]::NewLine } else { "No server output was captured." }
+            $logBox.Lines = $details -split "`r?`n"
+            [System.Windows.Forms.MessageBox]::Show("The server did not start.`r`n`r`n$details", "Local AI Launcher")
+        }
     }
     elseif ($script:serverStarting) {
         $statusLabel.Text = "Loading model..."
@@ -371,9 +385,15 @@ function Start-ScriptOperation {
 }
 
 function Start-SelectedServer {
+    $logDirectory = Join-Path $Root "logs"
+    New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+    $logStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $script:serverLogPath = Join-Path $logDirectory "launcher-$logStamp-start-server.log"
+    $taskArguments = @($script:serverLogPath, $StartScript)
+    $argumentText = ($taskArguments | ForEach-Object { '"' + $_.Replace('"', '\"') + '"' }) -join " "
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "powershell.exe"
-    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$StartScript`""
+    $psi.FileName = $env:ComSpec
+    $psi.Arguments = "/d /c `"`"$TaskRunner`" $argumentText`""
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
 
@@ -381,6 +401,7 @@ function Start-SelectedServer {
     $script:serverProcess.StartInfo = $psi
     [void]$script:serverProcess.Start()
     $script:serverStarting = $true
+    $script:serverFailureReported = $false
     Write-LauncherLog "Starting server. Loading a model can take a moment."
     $statusLabel.Text = "Loading model..."
 }
@@ -449,16 +470,18 @@ $timer.add_Tick({
         $exitCode = $script:operationProcess.ExitCode
         $after = $script:operationAfter
         $completedName = $script:operationName
+        $completedLogPath = $script:operationLogPath
         $script:operationProcess = $null
         $script:operationName = $null
         $script:operationAfter = $null
         $script:operationDownloadPath = $null
         $script:operationStage = $null
+        $script:operationLogPath = $null
         Set-OperationUi -Running $false
 
         if ($exitCode -ne 0) {
             Write-LauncherLog "$completedName failed (exit code $exitCode)."
-            $details = if ($script:operationLogPath -and (Test-Path $script:operationLogPath)) { (Get-Content $script:operationLogPath -Tail 12) -join [Environment]::NewLine } else { "No process output was captured." }
+            $details = if ($completedLogPath -and (Test-Path $completedLogPath)) { (Get-Content $completedLogPath -Tail 12) -join [Environment]::NewLine } else { "No process output was captured." }
             [System.Windows.Forms.MessageBox]::Show("$completedName failed (exit code $exitCode).`r`n`r`n$details", "Local AI Launcher")
         }
         else {
