@@ -29,7 +29,8 @@ What this repo does not commit:
 For a button-based launcher, double-click `launch-local-ai.cmd`. It lets you
 select a model, installs it when needed, stops the current server before a
 switch, starts the selected model, and provides a button to open the local chat
-page. It also
+page. Model downloads show the received size and each operation writes a
+timestamped log under `logs/` that is displayed in the launcher. It also
 includes copyable Chandra OCR prompts for Markdown, JSON, HTML, and plain-text
 output.
 

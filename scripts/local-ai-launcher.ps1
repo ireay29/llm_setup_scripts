@@ -12,6 +12,7 @@ $ManifestPath = Join-Path $Root "models.manifest.json"
 $InstallScript = Join-Path $Root "install-local-ai.ps1"
 $StartScript = Join-Path $PSScriptRoot "start-local-ai.ps1"
 $StopScript = Join-Path $PSScriptRoot "stop-local-ai.ps1"
+$TaskRunner = Join-Path $PSScriptRoot "run-local-ai-task.cmd"
 $ConfigPath = Join-Path $Root ".local-ai-config.json"
 $ApiKey = if ([string]::IsNullOrWhiteSpace($env:LLAMA_API_KEY)) { "local-qwen" } else { $env:LLAMA_API_KEY }
 
@@ -90,8 +91,8 @@ $modelItems = @(
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Local AI Launcher"
-$form.Size = New-Object System.Drawing.Size(760, 620)
-$form.MinimumSize = New-Object System.Drawing.Size(760, 620)
+$form.Size = New-Object System.Drawing.Size(760, 670)
+$form.MinimumSize = New-Object System.Drawing.Size(760, 670)
 $form.StartPosition = "CenterScreen"
 $form.Font = New-Object System.Drawing.Font("Yu Gothic UI", 10)
 
@@ -167,15 +168,21 @@ $progress.Size = New-Object System.Drawing.Size(680, 14)
 $progress.Style = [System.Windows.Forms.ProgressBarStyle]::Blocks
 $form.Controls.Add($progress)
 
+$downloadDetail = New-Object System.Windows.Forms.Label
+$downloadDetail.Text = ""
+$downloadDetail.Location = New-Object System.Drawing.Point(26, 356)
+$downloadDetail.Size = New-Object System.Drawing.Size(680, 22)
+$form.Controls.Add($downloadDetail)
+
 $ocrLabel = New-Object System.Windows.Forms.Label
 $ocrLabel.Text = "Chandra OCR output"
-$ocrLabel.Location = New-Object System.Drawing.Point(26, 378)
+$ocrLabel.Location = New-Object System.Drawing.Point(26, 394)
 $ocrLabel.AutoSize = $true
 $form.Controls.Add($ocrLabel)
 
 $ocrOutputPicker = New-Object System.Windows.Forms.ComboBox
 $ocrOutputPicker.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-$ocrOutputPicker.Location = New-Object System.Drawing.Point(26, 402)
+$ocrOutputPicker.Location = New-Object System.Drawing.Point(26, 418)
 $ocrOutputPicker.Size = New-Object System.Drawing.Size(200, 32)
 [void]$ocrOutputPicker.Items.AddRange(@("Markdown", "JSON", "HTML", "Plain text"))
 $ocrOutputPicker.SelectedIndex = 0
@@ -183,25 +190,25 @@ $form.Controls.Add($ocrOutputPicker)
 
 $copyPromptButton = New-Object System.Windows.Forms.Button
 $copyPromptButton.Text = "Copy OCR prompt"
-$copyPromptButton.Location = New-Object System.Drawing.Point(238, 399)
+$copyPromptButton.Location = New-Object System.Drawing.Point(238, 415)
 $copyPromptButton.Size = New-Object System.Drawing.Size(190, 36)
 $form.Controls.Add($copyPromptButton)
 
 $ocrHint = New-Object System.Windows.Forms.Label
 $ocrHint.Text = "Paste the copied prompt into chat together with an image."
-$ocrHint.Location = New-Object System.Drawing.Point(26, 443)
+$ocrHint.Location = New-Object System.Drawing.Point(26, 459)
 $ocrHint.Size = New-Object System.Drawing.Size(680, 24)
 $form.Controls.Add($ocrHint)
 
 $logLabel = New-Object System.Windows.Forms.Label
 $logLabel.Text = "Activity"
-$logLabel.Location = New-Object System.Drawing.Point(26, 482)
+$logLabel.Location = New-Object System.Drawing.Point(26, 492)
 $logLabel.AutoSize = $true
 $form.Controls.Add($logLabel)
 
 $logBox = New-Object System.Windows.Forms.TextBox
-$logBox.Location = New-Object System.Drawing.Point(26, 505)
-$logBox.Size = New-Object System.Drawing.Size(680, 66)
+$logBox.Location = New-Object System.Drawing.Point(26, 515)
+$logBox.Size = New-Object System.Drawing.Size(680, 100)
 $logBox.Multiline = $true
 $logBox.ReadOnly = $true
 $logBox.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
@@ -214,12 +221,61 @@ $script:serverProcess = $null
 $script:serverStarting = $false
 $script:pendingModelName = $null
 $script:nextStatusRefresh = [DateTime]::MinValue
+$script:operationDownloadPath = $null
+$script:operationStage = $null
+$script:operationLogPath = $null
 
 function Write-LauncherLog {
     param([string]$Message)
 
     $stamp = Get-Date -Format "HH:mm:ss"
     $logBox.AppendText("[$stamp] $Message$([Environment]::NewLine)")
+}
+
+function Format-ByteCount {
+    param([Int64]$Bytes)
+
+    if ($Bytes -ge 1GB) {
+        return ("{0:N2} GB" -f ($Bytes / 1GB))
+    }
+    if ($Bytes -ge 1MB) {
+        return ("{0:N1} MB" -f ($Bytes / 1MB))
+    }
+    return ("{0:N0} KB" -f ($Bytes / 1KB))
+}
+
+function Update-OperationProgress {
+    if ($script:operationLogPath -and (Test-Path $script:operationLogPath)) {
+        $logLines = @(Get-Content $script:operationLogPath -Tail 40 -ErrorAction SilentlyContinue)
+        $logBox.Lines = $logLines
+        if ($logLines -match "^Downloading:") {
+            $script:operationStage = "Downloading model"
+        }
+        elseif ($logLines -match "^SHA256 verified:") {
+            $script:operationStage = "Verifying model files"
+        }
+        elseif ($logLines -match "^Wrote config:") {
+            $script:operationStage = "Saving selected-model settings"
+        }
+    }
+
+    if (-not $script:operationDownloadPath) {
+        $downloadDetail.Text = ""
+        return
+    }
+
+    if ($script:operationStage -eq "Downloading model" -and (Test-Path $script:operationDownloadPath)) {
+        $size = (Get-Item $script:operationDownloadPath).Length
+        $downloadDetail.Text = "Downloading: $(Format-ByteCount $size) received. Keep the launcher open."
+        return
+    }
+
+    if ($script:operationStage) {
+        $downloadDetail.Text = $script:operationStage
+    }
+    else {
+        $downloadDetail.Text = "Checking the selected model..."
+    }
 }
 
 function Update-SelectedModelDetails {
@@ -285,18 +341,27 @@ function Start-ScriptOperation {
         [string]$ScriptPath,
         [string[]]$Arguments,
         [string]$Name,
+        [string]$DownloadPath,
         [scriptblock]$After
     )
 
-    $argumentText = ($Arguments | ForEach-Object { '"' + $_.Replace('"', '\"') + '"' }) -join " "
+    $logDirectory = Join-Path $Root "logs"
+    New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+    $logStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $safeName = ($Name -replace "[^A-Za-z0-9_.-]", "-")
+    $script:operationLogPath = Join-Path $logDirectory "launcher-$logStamp-$safeName.log"
+    $taskArguments = @($script:operationLogPath, $ScriptPath) + $Arguments
+    $argumentText = ($taskArguments | ForEach-Object { '"' + $_.Replace('"', '\"') + '"' }) -join " "
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "powershell.exe"
-    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`" $argumentText"
+    $psi.FileName = $env:ComSpec
+    $psi.Arguments = "/d /c `"`"$TaskRunner`" $argumentText`""
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
 
     $script:operationProcess = New-Object System.Diagnostics.Process
     $script:operationProcess.StartInfo = $psi
+    $script:operationDownloadPath = $DownloadPath
+    $script:operationStage = "Starting"
     [void]$script:operationProcess.Start()
     $script:operationName = $Name
     $script:operationAfter = $After
@@ -330,7 +395,9 @@ function Stop-ThenStartSelectedModel {
     Start-ScriptOperation -ScriptPath $StopScript -Arguments @() -Name "Stop current server" -After {
         $script:serverProcess = $null
         $script:serverStarting = $false
-        Start-ScriptOperation -ScriptPath $InstallScript -Arguments @("-Model", $script:pendingModelName) -Name "Prepare $script:pendingModelName" -After {
+        $modelSpec = $manifest.models.PSObject.Properties[$script:pendingModelName].Value
+        $modelPath = Join-Path $Root (Join-Path "models" $modelSpec.file)
+        Start-ScriptOperation -ScriptPath $InstallScript -Arguments @("-Model", $script:pendingModelName) -Name "Prepare $script:pendingModelName" -DownloadPath $modelPath -After {
             $selectedItem = Get-SelectedModel
             if ($selectedItem -and $selectedItem.Name -eq $script:pendingModelName) {
                 $selectedItem.Installed = $true
@@ -376,6 +443,8 @@ $copyPromptButton.add_Click({
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 750
 $timer.add_Tick({
+    Update-OperationProgress
+
     if ($script:operationProcess -and $script:operationProcess.HasExited) {
         $exitCode = $script:operationProcess.ExitCode
         $after = $script:operationAfter
@@ -383,11 +452,14 @@ $timer.add_Tick({
         $script:operationProcess = $null
         $script:operationName = $null
         $script:operationAfter = $null
+        $script:operationDownloadPath = $null
+        $script:operationStage = $null
         Set-OperationUi -Running $false
 
         if ($exitCode -ne 0) {
             Write-LauncherLog "$completedName failed (exit code $exitCode)."
-            [System.Windows.Forms.MessageBox]::Show("$completedName failed. Check the PowerShell error and activity log.", "Local AI Launcher")
+            $details = if ($script:operationLogPath -and (Test-Path $script:operationLogPath)) { (Get-Content $script:operationLogPath -Tail 12) -join [Environment]::NewLine } else { "No process output was captured." }
+            [System.Windows.Forms.MessageBox]::Show("$completedName failed (exit code $exitCode).`r`n`r`n$details", "Local AI Launcher")
         }
         else {
             Write-LauncherLog "Completed: $completedName"
